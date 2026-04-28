@@ -1,7 +1,8 @@
 'use client';
+import React from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
-import { X, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { X, CheckCircle, XCircle, Clock, type LucideIcon } from 'lucide-react';
 import api from '@/lib/api';
 import dayjs from 'dayjs';
 
@@ -61,12 +62,13 @@ export default function AppointmentModal({ open, onClose, appointment, defaultDa
     else createMutation.mutate(payload);
   };
 
-  const statusActions = appointment && [
+  type StatusAction = { label: string; value: string; icon: LucideIcon; color: string };
+  const statusActions: StatusAction[] = appointment ? [
     { label: 'Confirmar', value: 'CONFIRMED', icon: CheckCircle, color: 'text-blue-600' },
     { label: 'Iniciar', value: 'IN_PROGRESS', icon: Clock, color: 'text-yellow-600' },
     { label: 'Concluir', value: 'COMPLETED', icon: CheckCircle, color: 'text-green-600' },
     { label: 'Cancelar', value: 'CANCELLED', icon: XCircle, color: 'text-red-600' },
-  ];
+  ] : [];
 
   if (!open) return null;
 
@@ -84,7 +86,7 @@ export default function AppointmentModal({ open, onClose, appointment, defaultDa
 
         {isEdit && (
           <div className="px-6 py-3 border-b flex gap-2 flex-wrap">
-            {statusActions!.map((action) => (
+            {statusActions.map((action) => (
               <button
                 key={action.value}
                 onClick={() => updateMutation.mutate({ id: appointment.id, data: { status: action.value } })}

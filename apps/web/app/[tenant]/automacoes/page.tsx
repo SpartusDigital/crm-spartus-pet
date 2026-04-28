@@ -1,6 +1,6 @@
 'use client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Bot, Toggle, Plus, Zap } from 'lucide-react';
+import { Bot, Plus, Zap } from 'lucide-react';
 import api from '@/lib/api';
 
 const TRIGGER_LABELS: Record<string, string> = {

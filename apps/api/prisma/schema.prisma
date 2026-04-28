@@ -1,0 +1,299 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model Tenant {
+  id           String   @id @default(cuid())
+  slug         String   @unique
+  name         String
+  customDomain String?  @unique @map("custom_domain")
+  plan         String   @default("STARTER")
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  theme           TenantTheme?
+  settings        TenantSettings?
+  users           User[]
+  customers       Customer[]
+  pets            Pet[]
+  appointments    Appointment[]
+  services        Service[]
+  transactions    Transaction[]
+  automations     Automation[]
+  waConversations WhatsappConversation[]
+
+  @@map("tenants")
+}
+
+model TenantTheme {
+  id             String  @id @default(cuid())
+  tenantId       String  @unique @map("tenant_id")
+  primaryColor   String  @default("#6366f1") @map("primary_color")
+  secondaryColor String  @default("#8b5cf6") @map("secondary_color")
+  accentColor    String  @default("#ec4899") @map("accent_color")
+  bgColor        String  @default("#ffffff") @map("bg_color")
+  textColor      String  @default("#111827") @map("text_color")
+  fontFamily     String  @default("Inter") @map("font_family")
+  logoUrl        String? @map("logo_url")
+  faviconUrl     String? @map("favicon_url")
+  coverUrl       String? @map("cover_url")
+  borderRadius   String  @default("0.5rem") @map("border_radius")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("tenant_themes")
+}
+
+model TenantSettings {
+  id                String  @id @default(cuid())
+  tenantId          String  @unique @map("tenant_id")
+  petTypeLabel      String  @default("Pet") @map("pet_type_label")
+  currency          String  @default("BRL")
+  timezone          String  @default("America/Sao_Paulo")
+  workingHoursStart String  @default("08:00") @map("working_hours_start")
+  workingHoursEnd   String  @default("18:00") @map("working_hours_end")
+  workingDays       String  @default("1,2,3,4,5") @map("working_days")
+  appointmentBuffer Int     @default(15) @map("appointment_buffer")
+  whatsappEnabled   Boolean @default(false) @map("whatsapp_enabled")
+  whatsappInstance  String? @map("whatsapp_instance")
+  notifyOnNew       Boolean @default(true) @map("notify_on_new")
+  notifyOnCancel    Boolean @default(true) @map("notify_on_cancel")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("tenant_settings")
+}
+
+model User {
+  id           String    @id @default(cuid())
+  tenantId     String    @map("tenant_id")
+  email        String
+  passwordHash String    @map("password_hash")
+  name         String
+  role         String    @default("RECEPTIONIST")
+  phone        String?
+  avatarUrl    String?   @map("avatar_url")
+  active       Boolean   @default(true)
+  lastLoginAt  DateTime? @map("last_login_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  appointments Appointment[] @relation("AssignedTo")
+
+  @@unique([tenantId, email])
+  @@map("users")
+}
+
+model Customer {
+  id         String   @id @default(cuid())
+  tenantId   String   @map("tenant_id")
+  name       String
+  email      String?
+  phone      String
+  whatsappId String?  @map("whatsapp_id")
+  address    String?
+  city       String?
+  notes      String?
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  tenant          Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  pets            Pet[]
+  appointments    Appointment[]
+  transactions    Transaction[]
+  waConversations WhatsappConversation[]
+
+  @@unique([tenantId, phone])
+  @@map("customers")
+}
+
+model Pet {
+  id        String    @id @default(cuid())
+  tenantId  String    @map("tenant_id")
+  customerId String   @map("customer_id")
+  name      String
+  species   String
+  breed     String?
+  gender    String?
+  birthDate DateTime? @map("birth_date")
+  weight    Float?
+  color     String?
+  microchip String?
+  photoUrl  String?   @map("photo_url")
+  notes     String?
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer     Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  records      PetRecord[]
+  appointments Appointment[]
+  vaccines     Vaccine[]
+
+  @@map("pets")
+}
+
+model PetRecord {
+  id          String   @id @default(cuid())
+  petId       String   @map("pet_id")
+  type        String
+  date        DateTime
+  title       String
+  description String?
+  attachments String?
+  performedBy String?  @map("performed_by")
+  cost        Float?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  pet Pet @relation(fields: [petId], references: [id], onDelete: Cascade)
+
+  @@map("pet_records")
+}
+
+model Vaccine {
+  id           String    @id @default(cuid())
+  petId        String    @map("pet_id")
+  name         String
+  appliedAt    DateTime  @map("applied_at")
+  nextDoseAt   DateTime? @map("next_dose_at")
+  batch        String?
+  veterinarian String?
+  notes        String?
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  pet Pet @relation(fields: [petId], references: [id], onDelete: Cascade)
+
+  @@map("vaccines")
+}
+
+model Service {
+  id          String   @id @default(cuid())
+  tenantId    String   @map("tenant_id")
+  name        String
+  description String?
+  durationMin Int      @default(60) @map("duration_min")
+  price       Float
+  color       String   @default("#6366f1")
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  appointments Appointment[]
+
+  @@map("services")
+}
+
+model Appointment {
+  id           String    @id @default(cuid())
+  tenantId     String    @map("tenant_id")
+  petId        String    @map("pet_id")
+  customerId   String    @map("customer_id")
+  serviceId    String    @map("service_id")
+  assignedToId String?   @map("assigned_to_id")
+  startsAt     DateTime  @map("starts_at")
+  endsAt       DateTime  @map("ends_at")
+  status       String    @default("SCHEDULED")
+  price        Float
+  notes        String?
+  cancelReason String?   @map("cancel_reason")
+  remindedAt   DateTime? @map("reminded_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  pet         Pet          @relation(fields: [petId], references: [id])
+  customer    Customer     @relation(fields: [customerId], references: [id])
+  service     Service      @relation(fields: [serviceId], references: [id])
+  assignedTo  User?        @relation("AssignedTo", fields: [assignedToId], references: [id])
+  transaction Transaction?
+
+  @@map("appointments")
+}
+
+model Transaction {
+  id            String    @id @default(cuid())
+  tenantId      String    @map("tenant_id")
+  appointmentId String?   @unique @map("appointment_id")
+  customerId    String?   @map("customer_id")
+  type          String
+  amount        Float
+  category      String
+  description   String
+  method        String?
+  paidAt        DateTime? @map("paid_at")
+  dueAt         DateTime? @map("due_at")
+  status        String    @default("PENDING")
+  notes         String?
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  tenant      Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  appointment Appointment? @relation(fields: [appointmentId], references: [id])
+  customer    Customer?    @relation(fields: [customerId], references: [id])
+
+  @@map("transactions")
+}
+
+model WhatsappConversation {
+  id            String    @id @default(cuid())
+  tenantId      String    @map("tenant_id")
+  customerId    String?   @map("customer_id")
+  waChatId      String    @map("wa_chat_id")
+  contactName   String?   @map("contact_name")
+  contactPhone  String    @map("contact_phone")
+  lastMessageAt DateTime? @map("last_message_at")
+  unreadCount   Int       @default(0) @map("unread_count")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  tenant   Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer Customer?         @relation(fields: [customerId], references: [id])
+  messages WhatsappMessage[]
+
+  @@unique([tenantId, waChatId])
+  @@map("whatsapp_conversations")
+}
+
+model WhatsappMessage {
+  id             String   @id @default(cuid())
+  conversationId String   @map("conversation_id")
+  waMessageId    String?  @map("wa_message_id")
+  direction      String
+  body           String?
+  mediaUrl       String?  @map("media_url")
+  mediaType      String?  @map("media_type")
+  status         String   @default("SENT")
+  sentAt         DateTime @map("sent_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  conversation WhatsappConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@map("whatsapp_messages")
+}
+
+model Automation {
+  id        String    @id @default(cuid())
+  tenantId  String    @map("tenant_id")
+  name      String
+  trigger   String
+  conditions String?
+  actions   String
+  active    Boolean   @default(true)
+  runCount  Int       @default(0) @map("run_count")
+  lastRunAt DateTime? @map("last_run_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("automations")
+}

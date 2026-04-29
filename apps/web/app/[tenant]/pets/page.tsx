@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { PawPrint, Search, Plus, ChevronRight } from 'lucide-react';
 import api from '@/lib/api';
@@ -14,12 +14,19 @@ export default function PetsPage({ params }: { params: { tenant: string } }) {
   const { data: pets = [], isLoading } = useQuery({
     queryKey: ['pets'],
     queryFn: () => api.get('/pets'),
+    // Desabilita refetch automático ao focar na janela — evita re-render
+    // que causava perda de foco na barra de pesquisa.
+    refetchOnWindowFocus: false,
+    staleTime: 30_000,
   });
 
-  const filtered = pets.filter((p: any) =>
-    p.name.toLowerCase().includes(search.toLowerCase()) ||
-    p.species.toLowerCase().includes(search.toLowerCase()) ||
-    p.customer?.name.toLowerCase().includes(search.toLowerCase()),
+  const filtered = useMemo(() =>
+    pets.filter((p: any) =>
+      p.name.toLowerCase().includes(search.toLowerCase()) ||
+      p.species.toLowerCase().includes(search.toLowerCase()) ||
+      p.customer?.name.toLowerCase().includes(search.toLowerCase()),
+    ),
+    [pets, search],
   );
 
   return (

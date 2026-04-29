@@ -1,18 +1,27 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Users, Search, Plus, Phone, Mail, PawPrint } from 'lucide-react';
 import api from '@/lib/api';
 import CustomerModal from '@/components/customers/CustomerModal';
 
 export default function ClientesPage({ params }: { params: { tenant: string } }) {
+  const [inputSearch, setInputSearch] = useState('');
   const [search, setSearch] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [selected, setSelected] = useState<any>(null);
 
-  const { data: customers = [], isLoading } = useQuery({
+  // Debounce: só dispara a query 300ms após o usuário parar de digitar,
+  // evitando que o isLoading pisque a cada tecla e cause perda de foco.
+  useEffect(() => {
+    const t = setTimeout(() => setSearch(inputSearch), 300);
+    return () => clearTimeout(t);
+  }, [inputSearch]);
+
+  const { data: customers = [], isLoading, isFetching } = useQuery({
     queryKey: ['customers', search],
     queryFn: () => api.get(`/customers${search ? `?search=${search}` : ''}`),
+    staleTime: 10_000,
   });
 
   return (
@@ -32,12 +41,15 @@ export default function ClientesPage({ params }: { params: { tenant: string } })
         <input
           className="input pl-9"
           placeholder="Buscar por nome, telefone ou email..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          value={inputSearch}
+          onChange={(e) => setInputSearch(e.target.value)}
         />
+        {isFetching && !isLoading && (
+          <span className="absolute right-3 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+        )}
       </div>
 
-      {isLoading ? (
+      {isLoading && customers.length === 0 ? (
         <div className="space-y-3">
           {[...Array(5)].map((_, i) => <div key={i} className="card h-20 animate-pulse" />)}
         </div>

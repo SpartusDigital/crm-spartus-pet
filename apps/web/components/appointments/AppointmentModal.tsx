@@ -1,5 +1,5 @@
 'use client';
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { X, CheckCircle, XCircle, Clock, type LucideIcon } from 'lucide-react';
@@ -43,6 +43,41 @@ export default function AppointmentModal({ open, onClose, appointment, defaultDa
 
   const selectedService = services.find((s: any) => s.id === serviceId);
 
+  // --- PDV: desconto / ajuste de valor ---
+  const [finalPrice, setFinalPrice] = useState(0);
+  const [discountType, setDiscountType] = useState<'percent' | 'fixed'>('percent');
+  const [discountInput, setDiscountInput] = useState('');
+
+  const basePrice = Number(appointment?.price ?? selectedService?.price ?? 0);
+
+  // Reinicia o preço final sempre que o serviço selecionado muda
+  useEffect(() => {
+    setFinalPrice(Number(appointment?.price ?? selectedService?.price ?? 0));
+    setDiscountInput('');
+  }, [selectedService?.id]);
+
+  const applyDiscount = (val: string, type: 'percent' | 'fixed') => {
+    const num = parseFloat(val) || 0;
+    const base = Number(appointment?.price ?? selectedService?.price ?? 0);
+    if (type === 'percent') {
+      setFinalPrice(Math.max(0, base * (1 - num / 100)));
+    } else {
+      setFinalPrice(Math.max(0, base - num));
+    }
+  };
+
+  const handleDiscountInput = (val: string) => {
+    setDiscountInput(val);
+    applyDiscount(val, discountType);
+  };
+
+  const handleDiscountType = (type: 'percent' | 'fixed') => {
+    setDiscountType(type);
+    setDiscountInput('');
+    setFinalPrice(basePrice);
+  };
+  // --- fim PDV ---
+
   const createMutation = useMutation({
     mutationFn: (data: any) => api.post('/appointments', data),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['appointments'] }); onClose(); reset(); },
@@ -60,6 +95,13 @@ export default function AppointmentModal({ open, onClose, appointment, defaultDa
     const payload = { ...data, endsAt: endsAt.toISOString() };
     if (isEdit) updateMutation.mutate({ id: appointment.id, data: payload });
     else createMutation.mutate(payload);
+  };
+
+  // Ao concluir, envia o preço final ajustado (com desconto se houver)
+  const handleStatusAction = (value: string) => {
+    const data: any = { status: value };
+    if (value === 'COMPLETED') data.price = finalPrice > 0 ? finalPrice : basePrice;
+    updateMutation.mutate({ id: appointment.id, data });
   };
 
   type StatusAction = { label: string; value: string; icon: LucideIcon; color: string };
@@ -85,18 +127,76 @@ export default function AppointmentModal({ open, onClose, appointment, defaultDa
         </div>
 
         {isEdit && (
-          <div className="px-6 py-3 border-b flex gap-2 flex-wrap">
-            {statusActions.map((action) => (
-              <button
-                key={action.value}
-                onClick={() => updateMutation.mutate({ id: appointment.id, data: { status: action.value } })}
-                className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border hover:bg-gray-50 ${action.color}`}
-              >
-                <action.icon size={13} />
-                {action.label}
-              </button>
-            ))}
-          </div>
+          <>
+            <div className="px-6 py-3 border-b flex gap-2 flex-wrap">
+              {statusActions.map((action) => (
+                <button
+                  key={action.value}
+                  onClick={() => handleStatusAction(action.value)}
+                  className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border hover:bg-gray-50 ${action.color}`}
+                >
+                  <action.icon size={13} />
+                  {action.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Campo de desconto / ajuste de valor — PDV */}
+            {basePrice > 0 && (
+              <div className="px-6 py-4 border-b bg-gray-50">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Ajuste de Valor</p>
+                <div className="flex items-center gap-3 mb-3 text-sm">
+                  <span className="text-gray-500">Valor do serviço:</span>
+                  <span className="font-medium text-gray-800">
+                    R$ {basePrice.toFixed(2).replace('.', ',')}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm text-gray-500">Desconto:</span>
+                  <div className="flex rounded-lg border border-gray-200 overflow-hidden text-xs font-semibold">
+                    <button
+                      type="button"
+                      onClick={() => handleDiscountType('percent')}
+                      className={`px-3 py-1.5 transition-colors ${discountType === 'percent' ? 'bg-primary text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+                    >%</button>
+                    <button
+                      type="button"
+                      onClick={() => handleDiscountType('fixed')}
+                      className={`px-3 py-1.5 transition-colors ${discountType === 'fixed' ? 'bg-primary text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+                    >R$</button>
+                  </div>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="0"
+                    value={discountInput}
+                    onChange={(e) => handleDiscountInput(e.target.value)}
+                    className="input w-24 text-sm"
+                  />
+                  <span className="text-gray-400">→</span>
+                  <span className="text-xs text-gray-500">Valor final:</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={finalPrice}
+                    onChange={(e) => {
+                      const v = parseFloat(e.target.value) || 0;
+                      setFinalPrice(v);
+                      setDiscountInput('');
+                    }}
+                    className="input w-28 text-sm font-bold text-primary"
+                  />
+                  {finalPrice < basePrice && basePrice > 0 && (
+                    <span className="text-xs text-green-600 font-medium">
+                      (-R$ {(basePrice - finalPrice).toFixed(2).replace('.', ',')})
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+          </>
         )}
 
         <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-4">

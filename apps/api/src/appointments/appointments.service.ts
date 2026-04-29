@@ -1,11 +1,69 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateAppointmentDto } from './dto/create-appointment.dto';
 import { UpdateAppointmentDto } from './dto/update-appointment.dto';
 
 @Injectable()
-export class AppointmentsService {
+export class AppointmentsService implements OnModuleInit {
   constructor(private prisma: PrismaService) {}
+
+  onModuleInit() {
+    // Verifica agendamentos vencidos a cada 10 minutos
+    setTimeout(() => this.autoCompleteOverdue(), 15_000);
+    setInterval(() => this.autoCompleteOverdue(), 10 * 60 * 1000);
+  }
+
+  // Conclui automaticamente agendamentos que passaram 30 min do horário de término
+  // e ainda estão como SCHEDULED, CONFIRMED ou IN_PROGRESS.
+  // Registra a transação financeira sem precisar de ação manual no PDV.
+  private async autoCompleteOverdue() {
+    try {
+      const cutoff = new Date(Date.now() - 30 * 60 * 1000);
+
+      const overdue = await this.prisma.appointment.findMany({
+        where: {
+          status: { in: ['SCHEDULED', 'CONFIRMED', 'IN_PROGRESS'] },
+          endsAt: { lt: cutoff },
+        },
+        include: { service: true },
+      });
+
+      for (const appt of overdue) {
+        await this.prisma.appointment.update({
+          where: { id: appt.id },
+          data: { status: 'COMPLETED' },
+        });
+
+        await this.prisma.transaction.upsert({
+          where: { appointmentId: appt.id },
+          create: {
+            tenantId: appt.tenantId,
+            appointmentId: appt.id,
+            customerId: appt.customerId,
+            type: 'INCOME',
+            amount: appt.price,
+            category: 'Serviço',
+            description: `Serviço: ${appt.service.name}`,
+            status: 'PAID',
+            paidAt: new Date(),
+          },
+          update: { status: 'PAID', paidAt: new Date() },
+        });
+
+        await this.prisma.petRecord.create({
+          data: {
+            petId: appt.petId,
+            type: 'OTHER',
+            date: new Date(),
+            title: appt.service.name,
+            cost: appt.price,
+          },
+        });
+      }
+    } catch {
+      // Erro silencioso — não derruba o servidor se o banco estiver indisponível
+    }
+  }
 
   async create(tenantId: string, dto: CreateAppointmentDto) {
     const service = await this.prisma.service.findFirst({ where: { id: dto.serviceId, tenantId } });

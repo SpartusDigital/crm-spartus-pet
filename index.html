@@ -323,7 +323,7 @@ fbq('track', 'PageView');
 const SUPABASE_URL = 'https://ltruyvnkqjemdgzkvceo.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_jxUqGyqvJlX8oPURg2Pfmg_uXnAZgmC';
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
-  auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false }
+  auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
 });
 const ADMIN_EMAIL = 'gustavoponteslopes@gmail.com';
 const isAdmin = () => session && session.email && session.email.toLowerCase() === ADMIN_EMAIL;
@@ -432,6 +432,18 @@ async function loadAllFromSupabase() {
     if (p) {
       auth.nome = p.nome || auth.nome;
       session.nome = auth.nome;
+    }
+    // Auto-inicia trial de 3 dias para novos usuários sem plano cadastrado
+    if (!p.plano_ativo && !p.plano) {
+      const expira = new Date();
+      expira.setDate(expira.getDate() + 3);
+      const trialData = {
+        plano: 'trial', plano_ativo: true,
+        plano_data_inicio: new Date().toISOString().slice(0, 10),
+        plano_data_expiracao: expira.toISOString().slice(0, 10)
+      };
+      const { error: trialErr } = await sb.from('profiles').update(trialData).eq('id', user.id);
+      if (!trialErr) Object.assign(p, trialData);
     }
     state.empresa = Mappers.empresaFromProfile(p);
     state.config = Mappers.configFromProfile(p);
@@ -648,6 +660,9 @@ window.enviarResetSenha = async function(e) {
 
 function traduzirErroAuth(msg) {
   var m = (msg || '').toLowerCase();
+  if (/error sending confirmation|unexpected_failure/i.test(m)) {
+    return { tipo: 'outro', texto: 'Falha ao enviar e-mail de confirmação. Tente novamente em alguns minutos ou entre em contato: comercial@spartusdigital.com' };
+  }
   if (/security purposes|only request this after|rate.?limit|too many request/i.test(m)) {
     var seg = (msg.match(/after (\d+) second/i) || [])[1];
     return { tipo: 'rateLimit', segundos: parseInt(seg || '60', 10), texto: 'Muitas tentativas em pouco tempo. Aguarde alguns segundos e tente novamente.' };

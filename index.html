@@ -82,7 +82,8 @@ body {
 .login-card input { width: 100%; padding: 13px 16px; border: 1.5px solid var(--border); border-radius: 12px; font-size: 15px; font-family: inherit; background: var(--bg); transition: all 0.2s; }
 .login-card input:focus { outline: none; border-color: var(--gold); background: white; box-shadow: 0 0 0 4px rgba(201,169,110,0.12); }
 .login-card button[type="submit"] { width: 100%; padding: 14px; background: var(--dark); color: white; border: none; border-radius: 999px; font-size: 14px; font-weight: 700; cursor: pointer; margin-top: 10px; transition: all 0.25s; letter-spacing: 0.3px; font-family: inherit; }
-.login-card button[type="submit"]:hover { background: var(--gold); transform: translateY(-2px); box-shadow: 0 10px 25px rgba(201,169,110,0.35); }
+.login-card button[type="submit"]:hover:not(:disabled) { background: var(--gold); transform: translateY(-2px); box-shadow: 0 10px 25px rgba(201,169,110,0.35); }
+.login-card button[type="submit"]:disabled { opacity: 0.65; cursor: not-allowed; transform: none; }
 .login-card .err { background: #fef2f2; color: #991b1b; padding: 11px 14px; border-radius: 10px; font-size: 13px; margin-bottom: 14px; text-align: center; border: 1px solid #fecaca; }
 .login-card .info { background: rgba(201,169,110,0.1); color: var(--gold-dark); padding: 11px 14px; border-radius: 10px; font-size: 12px; margin-bottom: 14px; text-align: center; line-height: 1.55; border: 1px solid rgba(201,169,110,0.2); }
 
@@ -501,55 +502,202 @@ function renderLogin() {
 
 function renderFormLogin(hasUser) {
   return `
-    <form onsubmit="doLogin(event); return false;">
-      <div class="form-group"><label>E-mail</label><input type="email" name="email" required autocomplete="email" value="${hasUser ? escapeHtml(auth.email) : ''}"></div>
-      <div class="form-group"><label>Senha</label><input type="password" name="senha" required autocomplete="current-password" minlength="4"></div>
-      <button type="submit">Entrar</button>
+    <form onsubmit="doLogin(event); return false;" autocomplete="on">
+      <div class="form-group"><label>E-mail</label><input type="email" name="email" required autocomplete="email" placeholder="seu@email.com" value="${hasUser ? escapeHtml(auth.email) : ''}"></div>
+      <div class="form-group"><label>Senha</label><input type="password" name="senha" required autocomplete="current-password" minlength="4" placeholder="••••••••"></div>
+      <button type="submit" id="btnLogin">Entrar</button>
     </form>
-    <p style="text-align:center;margin-top:14px;font-size:12px;color:var(--text-muted)">Esqueceu a senha? <a href="#" onclick="resetAuth();return false" style="color:var(--accent)">Redefinir conta</a></p>
+    <p style="text-align:center;margin-top:16px;font-size:12px;color:var(--text-muted)">Esqueceu a senha? <a href="#" onclick="mostrarTelaRecuperarSenha();return false" style="color:var(--accent);font-weight:600">Recuperar acesso</a></p>
   `;
 }
 
 function renderFormSignup(hasUser) {
   if (hasUser) {
-    return `<div class="info">Já existe uma conta cadastrada (<strong>${escapeHtml(auth.email)}</strong>). Para criar uma nova, primeiro <a href="#" onclick="resetAuth();return false" style="color:var(--accent);font-weight:600">redefina a conta atual</a>.</div>`;
+    return `<div class="info">Já existe uma conta cadastrada (<strong>${escapeHtml(auth.email)}</strong>). Para criar uma nova, primeiro <a href="#" onclick="mostrarTelaRecuperarSenha();return false" style="color:var(--accent);font-weight:600">redefina a conta atual</a>.</div>`;
   }
   return `
-    <div class="info">Primeiro acesso: defina seu nome, e-mail e senha para acessar o CRM.</div>
-    <form onsubmit="doSignup(event); return false;">
-      <div class="form-group"><label>Nome</label><input name="nome" required autocomplete="name"></div>
-      <div class="form-group"><label>E-mail</label><input type="email" name="email" required autocomplete="email"></div>
-      <div class="form-group"><label>Senha</label><input type="password" name="senha" required autocomplete="new-password" minlength="4"></div>
-      <button type="submit">Criar conta e entrar</button>
+    <div class="info" style="font-size:13px;line-height:1.65">
+      Crie sua conta gratuita. Após o cadastro, você receberá um e-mail para ativar o acesso.
+    </div>
+    <form onsubmit="doSignup(event); return false;" autocomplete="on">
+      <div class="form-group"><label>Nome completo</label><input name="nome" required autocomplete="name" placeholder="Seu nome"></div>
+      <div class="form-group"><label>E-mail</label><input type="email" name="email" required autocomplete="email" placeholder="seu@email.com"></div>
+      <div class="form-group"><label>Senha</label><input type="password" name="senha" required autocomplete="new-password" minlength="6" placeholder="Mínimo 6 caracteres"></div>
+      <button type="submit" id="btnSignup">Criar conta</button>
     </form>
   `;
 }
 
 window.trocarLoginMode = function(modo) { loginMode = modo; renderLogin(); };
 
+function mostrarTelaEmailEnviado(email) {
+  document.getElementById('root').innerHTML = `
+    <div class="login-wrap">
+      <div class="login-card" style="text-align:center;padding:48px 36px">
+        <div style="font-size:52px;margin-bottom:18px">📬</div>
+        <h2 style="font-family:Georgia,serif;font-size:22px;font-weight:800;margin-bottom:10px">Verifique seu e-mail</h2>
+        <p style="color:var(--text-muted);font-size:14px;line-height:1.65;margin-bottom:22px">
+          Enviamos o link de ativação para<br>
+          <strong style="color:var(--text);font-size:15px">${escapeHtml(email)}</strong>
+        </p>
+        <div class="info" style="text-align:left;font-size:13px;line-height:1.85;margin-bottom:22px">
+          <strong>Próximos passos:</strong><br>
+          1. Abra seu e-mail<br>
+          2. Encontre o e-mail da <strong>Spartus Pet</strong><br>
+          3. Clique no botão para ativar sua conta<br>
+          <span style="color:var(--gold-dark)">⚠️ Não encontrou? Verifique a pasta de <strong>spam</strong></span>
+        </div>
+        <button onclick="loginMode='login';renderLogin()" style="width:100%;padding:13px;background:var(--dark);color:white;border:none;border-radius:999px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;transition:all 0.2s">
+          Já ativei minha conta — Entrar
+        </button>
+        <p style="margin-top:14px;font-size:12px;color:var(--text-muted)">
+          Não recebeu? <a href="#" onclick="reenviarEmailConfirmacao('${escapeHtml(email)}');return false" style="color:var(--accent);font-weight:600">Reenviar e-mail</a>
+        </p>
+      </div>
+    </div>
+  `;
+}
+
+function mostrarTelaRecuperarSenha() {
+  document.getElementById('root').innerHTML = `
+    <div class="login-wrap">
+      <div class="login-card">
+        <div style="text-align:center;margin-bottom:26px">
+          <div style="font-size:44px;margin-bottom:14px">🔐</div>
+          <h2 style="font-family:Georgia,serif;font-size:22px;font-weight:800;margin-bottom:8px">Recuperar acesso</h2>
+          <p style="color:var(--text-muted);font-size:14px;line-height:1.65;margin:0">
+            Digite seu e-mail e enviaremos um link para criar uma nova senha.
+          </p>
+        </div>
+        <div id="resetErr"></div>
+        <form onsubmit="enviarResetSenha(event);return false;" autocomplete="on">
+          <div class="form-group">
+            <label>E-mail da conta</label>
+            <input type="email" name="email" required autocomplete="email" placeholder="seu@email.com">
+          </div>
+          <button type="submit" id="btnReset">Enviar link de recuperação</button>
+        </form>
+        <p style="text-align:center;margin-top:16px;font-size:12px;color:var(--text-muted)">
+          Lembrou a senha? <a href="#" onclick="loginMode='login';renderLogin();return false" style="color:var(--accent);font-weight:600">Voltar ao login</a>
+        </p>
+      </div>
+    </div>
+  `;
+}
+
+window.reenviarEmailConfirmacao = async function(email) {
+  try {
+    await sb.auth.resend({ type: 'signup', email, options: { emailRedirectTo: 'https://crm.spartuspet.com.br' } });
+    showAlert('E-mail reenviado! Verifique sua caixa de entrada e também a pasta de spam.');
+  } catch(e) {
+    showAlert('Não foi possível reenviar agora. Aguarde alguns minutos e tente novamente.');
+  }
+};
+
+window.enviarResetSenha = async function(e) {
+  e.preventDefault();
+  const f = e.target;
+  const btn = document.getElementById('btnReset');
+  const el = document.getElementById('resetErr');
+  if (btn) { btn.disabled = true; btn.textContent = 'Enviando...'; }
+  if (el) el.innerHTML = '';
+  const email = f.email.value.trim().toLowerCase();
+  try {
+    await sb.auth.resetPasswordForEmail(email, { redirectTo: 'https://crm.spartuspet.com.br' });
+    document.getElementById('root').innerHTML = `
+      <div class="login-wrap">
+        <div class="login-card" style="text-align:center;padding:48px 36px">
+          <div style="font-size:52px;margin-bottom:18px">📧</div>
+          <h2 style="font-family:Georgia,serif;font-size:22px;font-weight:800;margin-bottom:10px">E-mail enviado!</h2>
+          <p style="color:var(--text-muted);font-size:14px;line-height:1.65;margin-bottom:22px">
+            Enviamos o link de recuperação para<br>
+            <strong style="color:var(--text);font-size:15px">${escapeHtml(email)}</strong>
+          </p>
+          <div class="info" style="text-align:left;font-size:13px;line-height:1.85;margin-bottom:22px">
+            <strong>Próximos passos:</strong><br>
+            1. Abra seu e-mail<br>
+            2. Clique no link para criar uma nova senha<br>
+            <span style="color:var(--gold-dark)">⚠️ Não encontrou? Verifique a pasta de <strong>spam</strong></span>
+          </div>
+          <button onclick="loginMode='login';renderLogin()" style="width:100%;padding:13px;background:var(--dark);color:white;border:none;border-radius:999px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;transition:all 0.2s;">
+            Voltar ao login
+          </button>
+        </div>
+      </div>
+    `;
+  } catch(err) {
+    if (el) el.innerHTML = '<div class="err">Não foi possível enviar. Verifique o endereço e tente novamente.</div>';
+    if (btn) { btn.disabled = false; btn.textContent = 'Enviar link de recuperação'; }
+  }
+  return false;
+};
+
+function traduzirErroAuth(msg) {
+  var m = (msg || '').toLowerCase();
+  if (/security purposes|only request this after|rate.?limit|too many request/i.test(m)) {
+    var seg = (msg.match(/after (\d+) second/i) || [])[1];
+    return { tipo: 'rateLimit', segundos: parseInt(seg || '60', 10), texto: 'Muitas tentativas em pouco tempo. Aguarde alguns segundos e tente novamente.' };
+  }
+  if (/already registered|user already exist|already been registered/i.test(m)) return { tipo: 'outro', texto: 'Este e-mail já está cadastrado. Clique em "Entrar" para fazer login.' };
+  if (/invalid login credentials|invalid credentials|invalid email or password|wrong password|bad credentials/i.test(m)) return { tipo: 'outro', texto: 'E-mail ou senha incorretos. Verifique e tente novamente.' };
+  if (/email not confirmed|email link is invalid or has expired|otp expired/i.test(m)) return { tipo: 'outro', texto: 'E-mail ainda não confirmado. Verifique sua caixa de entrada (e spam) e clique no link que enviamos.' };
+  if (/invalid email/i.test(m)) return { tipo: 'outro', texto: 'E-mail inválido. Verifique o endereço digitado.' };
+  if (/password should be at least|password.*too short|weak password/i.test(m)) return { tipo: 'outro', texto: 'A senha deve ter pelo menos 6 caracteres.' };
+  if (/network|fetch|failed to fetch|connection/i.test(m)) return { tipo: 'outro', texto: 'Erro de conexão. Verifique sua internet e tente novamente.' };
+  return { tipo: 'outro', texto: 'Algo deu errado. Tente novamente ou fale com o suporte.' };
+}
+
+function iniciarContagemRegressiva(btnId, textoPadrao, segundos) {
+  var restando = segundos;
+  var btn = document.getElementById(btnId);
+  if (btn) btn.textContent = 'Aguarde ' + restando + 's...';
+  var intervalo = setInterval(function() {
+    restando--;
+    var b = document.getElementById(btnId);
+    if (!b) { clearInterval(intervalo); return; }
+    if (restando <= 0) {
+      clearInterval(intervalo);
+      b.disabled = false;
+      b.textContent = textoPadrao;
+    } else {
+      b.textContent = 'Aguarde ' + restando + 's...';
+    }
+  }, 1000);
+}
+
 window.doSignup = async function(e) {
   e.preventDefault();
   const f = e.target;
+  const btn = document.getElementById('btnSignup');
+  const el = document.getElementById('authErr');
+  if (btn) { btn.disabled = true; btn.textContent = 'Criando conta...'; }
+  if (el) el.innerHTML = '';
+  const email = f.email.value.trim().toLowerCase();
   try {
     const { data, error } = await sb.auth.signUp({
-      email: f.email.value.trim().toLowerCase(),
+      email,
       password: f.senha.value,
-      options: { data: { nome: f.nome.value.trim() } }
+      options: {
+        data: { nome: f.nome.value.trim() },
+        emailRedirectTo: 'https://crm.spartuspet.com.br'
+      }
     });
     if (error) throw error;
     if (!data.session) {
-      const el = document.getElementById('authErr');
-      if (el) el.innerHTML = '<div class="info">Conta criada. Verifique seu e-mail para confirmar antes de entrar.</div>';
-      loginMode = 'login';
-      setTimeout(() => renderLogin(), 1500);
+      mostrarTelaEmailEnviado(email);
       return false;
     }
     await loadAllFromSupabase();
     if (isAdmin()) currentPage = 'admin';
     render();
   } catch(err) {
-    const el = document.getElementById('authErr');
-    if (el) el.innerHTML = '<div class="err">Erro ao criar conta: ' + escapeHtml(err.message || String(err)) + '</div>';
+    const resultado = traduzirErroAuth(err.message || String(err));
+    if (el) el.innerHTML = '<div class="err">' + escapeHtml(resultado.texto) + '</div>';
+    if (resultado.tipo === 'rateLimit') {
+      iniciarContagemRegressiva('btnSignup', 'Criar conta', resultado.segundos);
+    } else {
+      if (btn) { btn.disabled = false; btn.textContent = 'Criar conta'; }
+    }
   }
   return false;
 };
@@ -557,6 +705,10 @@ window.doSignup = async function(e) {
 window.doLogin = async function(e) {
   e.preventDefault();
   const f = e.target;
+  const btn = document.getElementById('btnLogin');
+  const el = document.getElementById('authErr');
+  if (btn) { btn.disabled = true; btn.textContent = 'Entrando...'; }
+  if (el) el.innerHTML = '';
   try {
     const { data, error } = await sb.auth.signInWithPassword({
       email: f.email.value.trim().toLowerCase(),
@@ -567,15 +719,18 @@ window.doLogin = async function(e) {
     if (isAdmin()) currentPage = 'admin';
     render();
   } catch(err) {
-    const el = document.getElementById('authErr');
-    if (el) el.innerHTML = '<div class="err">' + escapeHtml(err.message || 'E-mail ou senha incorretos') + '</div>';
+    const resultado = traduzirErroAuth(err.message || String(err));
+    if (el) el.innerHTML = '<div class="err">' + escapeHtml(resultado.texto) + '</div>';
+    if (resultado.tipo === 'rateLimit') {
+      iniciarContagemRegressiva('btnLogin', 'Entrar', resultado.segundos);
+    } else {
+      if (btn) { btn.disabled = false; btn.textContent = 'Entrar'; }
+    }
   }
   return false;
 };
 
-window.resetAuth = function() {
-  showAlert('Para redefinir a conta ou senha, use a opção "Esqueci minha senha" da Supabase ou entre em contato com o suporte: spartuspet@gmail.com');
-};
+window.resetAuth = function() { mostrarTelaRecuperarSenha(); };
 
 window.logout = async function() {
   try { await sb.auth.signOut(); } catch(e) { console.warn('logout', e); }

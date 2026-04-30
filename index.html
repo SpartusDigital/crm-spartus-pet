@@ -288,9 +288,80 @@ small.hint { color: var(--text-muted); font-size: 11px; }
 .logo-preview { width: 130px; height: 130px; border-radius: 18px; background: white; border: 2.5px solid var(--border); display: flex; align-items: center; justify-content: center; color: var(--gold); font-family: 'Playfair Display', serif; font-weight: 800; font-size: 36px; margin: 0 auto 14px; overflow: hidden; padding: 8px; box-shadow: 0 2px 8px rgba(15,15,15,0.05); }
 .logo-preview img { width: 100%; height: 100%; object-fit: contain; }
 
+/* ============ PASSWORD TOGGLE ============ */
+.pw-wrap { position: relative; display: flex; align-items: center; }
+.pw-wrap input { width: 100%; padding-right: 44px !important; }
+.pw-toggle {
+  position: absolute; right: 12px; background: none; border: none; cursor: pointer;
+  color: var(--text-muted); padding: 4px; display: flex; align-items: center;
+  transition: color 0.2s; flex-shrink: 0;
+}
+.pw-toggle:hover { color: var(--text); }
+
 /* ============ RESPONSIVE ============ */
 @media (max-width: 900px) { .grid-2, .grid-3, .pdv-grid { grid-template-columns: 1fr; } }
 @media (max-width: 700px) { .sidebar { width: 220px; } .main { padding: 22px 18px; } .page-title { font-size: 24px; } }
+
+/* ============ MOBILE ============ */
+.mobile-header { display: none; }
+.mobile-nav-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 140; }
+.mobile-nav-overlay.open { display: block; }
+
+@media (max-width: 640px) {
+  .mobile-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 16px; height: 56px; background: var(--dark);
+    position: sticky; top: 0; z-index: 130; flex-shrink: 0;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+  }
+  .mobile-header-brand { display: flex; align-items: center; gap: 10px; }
+  .mobile-header-name { color: white; font-family: 'Playfair Display', serif; font-size: 16px; font-weight: 700; }
+  .hamburger-btn {
+    background: none; border: none; cursor: pointer; color: white;
+    padding: 8px; display: flex; align-items: center; justify-content: center;
+    border-radius: 8px; transition: background 0.2s;
+  }
+  .hamburger-btn:hover { background: rgba(255,255,255,0.1); }
+
+  .app { flex-direction: column; }
+  .sidebar {
+    position: fixed; top: 0; left: 0; width: 280px !important; height: 100vh;
+    z-index: 150; transform: translateX(-100%); transition: transform 0.3s ease;
+  }
+  .sidebar.sidebar-open { transform: translateX(0); box-shadow: 8px 0 32px rgba(0,0,0,0.35); }
+
+  .main { padding: 18px 14px; overflow-x: hidden; }
+  .page-title { font-size: 20px; }
+  .page-header { margin-bottom: 16px; }
+
+  .kpi-grid { grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+  .kpi { padding: 14px 16px; }
+  .kpi-value { font-size: 22px; }
+  .kpi-label { font-size: 10px; }
+
+  .card { padding: 16px; border-radius: 14px; margin-bottom: 14px; overflow-x: auto; }
+  .card h3 { font-size: 16px; margin-bottom: 12px; }
+  table { min-width: 480px; }
+  th, td { padding: 9px 10px; font-size: 12px; }
+
+  .search-bar { flex-direction: column; }
+  .search-bar input, .search-bar select { min-width: 0; width: 100%; border-radius: 10px; }
+
+  .modal { padding: 20px; border-radius: 16px; max-height: 95vh; }
+  .modal-actions { flex-direction: column-reverse; }
+  .modal-actions .btn { width: 100%; justify-content: center; }
+
+  .tabs { overflow-x: auto; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; padding-bottom: 2px; }
+  .tab { white-space: nowrap; padding: 10px 14px; font-size: 12px; }
+
+  .trial-banner { font-size: 12px; padding: 10px 14px; }
+  .login-card { padding: 30px 22px; }
+  .login-card h1 { font-size: 24px; }
+
+  .page-header .btn { font-size: 12px; padding: 8px 14px; }
+  .data-actions { flex-wrap: wrap; }
+  .calendar-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+}
 
 /* ============ SCROLLBAR ============ */
 ::-webkit-scrollbar { width: 10px; height: 10px; }
@@ -516,7 +587,7 @@ function renderFormLogin(hasUser) {
   return `
     <form onsubmit="doLogin(event); return false;" autocomplete="on">
       <div class="form-group"><label>E-mail</label><input type="email" name="email" required autocomplete="email" placeholder="seu@email.com" value="${hasUser ? escapeHtml(auth.email) : ''}"></div>
-      <div class="form-group"><label>Senha</label><input type="password" name="senha" required autocomplete="current-password" minlength="4" placeholder="••••••••"></div>
+      <div class="form-group"><label>Senha</label><div class="pw-wrap"><input type="password" name="senha" required autocomplete="current-password" minlength="4" placeholder="••••••••"><button type="button" class="pw-toggle" onclick="toggleSenha(this)" tabindex="-1">${_eyeOpen}</button></div></div>
       <button type="submit" id="btnLogin">Entrar</button>
     </form>
     <p style="text-align:center;margin-top:16px;font-size:12px;color:var(--text-muted)">Esqueceu a senha? <a href="#" onclick="mostrarTelaRecuperarSenha();return false" style="color:var(--accent);font-weight:600">Recuperar acesso</a></p>
@@ -528,19 +599,34 @@ function renderFormSignup(hasUser) {
     return `<div class="info">Já existe uma conta cadastrada (<strong>${escapeHtml(auth.email)}</strong>). Para criar uma nova, primeiro <a href="#" onclick="mostrarTelaRecuperarSenha();return false" style="color:var(--accent);font-weight:600">redefina a conta atual</a>.</div>`;
   }
   return `
-    <div class="info" style="font-size:13px;line-height:1.65">
-      Crie sua conta gratuita. Após o cadastro, você receberá um e-mail para ativar o acesso.
-    </div>
     <form onsubmit="doSignup(event); return false;" autocomplete="on">
       <div class="form-group"><label>Nome completo</label><input name="nome" required autocomplete="name" placeholder="Seu nome"></div>
       <div class="form-group"><label>E-mail</label><input type="email" name="email" required autocomplete="email" placeholder="seu@email.com"></div>
-      <div class="form-group"><label>Senha</label><input type="password" name="senha" required autocomplete="new-password" minlength="6" placeholder="Mínimo 6 caracteres"></div>
+      <div class="form-group"><label>Senha</label><div class="pw-wrap"><input type="password" name="senha" required autocomplete="new-password" minlength="6" placeholder="Mínimo 6 caracteres"><button type="button" class="pw-toggle" onclick="toggleSenha(this)" tabindex="-1">${_eyeOpen}</button></div></div>
       <button type="submit" id="btnSignup">Criar conta</button>
     </form>
   `;
 }
 
 window.trocarLoginMode = function(modo) { loginMode = modo; renderLogin(); };
+
+const _eyeOpen = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
+const _eyeOff = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
+window.toggleSenha = function(btn) {
+  const inp = btn.previousElementSibling;
+  const show = inp.type === 'password';
+  inp.type = show ? 'text' : 'password';
+  btn.innerHTML = show ? _eyeOff : _eyeOpen;
+};
+
+window.toggleMobileNav = function() {
+  document.getElementById('appSidebar')?.classList.toggle('sidebar-open');
+  document.getElementById('mobileOverlay')?.classList.toggle('open');
+};
+window.closeMobileNav = function() {
+  document.getElementById('appSidebar')?.classList.remove('sidebar-open');
+  document.getElementById('mobileOverlay')?.classList.remove('open');
+};
 
 function mostrarTelaEmailEnviado(email) {
   document.getElementById('root').innerHTML = `
@@ -795,7 +881,17 @@ function renderShell() {
     ${supportBanner}
     ${trialBanner}
     <div class="app">
-      <aside class="sidebar">
+      <div class="mobile-header">
+        <div class="mobile-header-brand">
+          <div class="sidebar-logo-img" style="width:36px;height:36px;border-radius:8px;flex-shrink:0">${onAdminPage ? spartusLogoSVG(28) : (state.empresa.logo ? `<img src="${state.empresa.logo}" alt="logo">` : initials)}</div>
+          <span class="mobile-header-name">${onAdminPage ? 'Spartus Pet' : escapeHtml(state.empresa.nome || 'Meu Pet Shop')}</span>
+        </div>
+        <button class="hamburger-btn" onclick="toggleMobileNav()" aria-label="Menu">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="mobile-nav-overlay" id="mobileOverlay" onclick="closeMobileNav()"></div>
+      <aside class="sidebar" id="appSidebar">
         <div class="sidebar-header">
           <div class="sidebar-logo">
             <div class="sidebar-logo-img" style="${onAdminPage?'background:#fff;padding:4px':''}">${onAdminPage ? spartusLogoSVG(36) : (state.empresa.logo ? `<img src="${state.empresa.logo}" alt="logo">` : initials)}</div>
@@ -831,7 +927,8 @@ function renderShell() {
     document.querySelectorAll('#nav a').forEach(x => x.classList.remove('active'));
     a.classList.add('active');
     currentPage = a.dataset.page;
-    render(); // re-render completo para atualizar shell (nome/logo da empresa)
+    closeMobileNav();
+    render();
   });
   document.querySelector(`#nav a[data-page="${currentPage}"]`)?.classList.add('active');
 }
@@ -1727,9 +1824,10 @@ const PLANOS_VALORES = { 'Mensal': 197, 'Semestral': 147, 'Anual': 97, 'Trial': 
 
 function statusCliente(c) {
   if (!c.ativo) return 'Inativo';
-  if (c.plano === 'Cancelado') return 'Cancelado';
+  const p = (c.plano || '').toLowerCase();
+  if (p === 'cancelado') return 'Cancelado';
   if (c.dataExpiracao && c.dataExpiracao < todayStr()) return 'Vencido';
-  if (c.plano === 'Trial') return 'Trial';
+  if (p === 'trial') return 'Trial';
   return 'Ativo';
 }
 function corStatus(s) { return ({ Ativo: 'success', Trial: 'info', Cancelado: 'danger', Vencido: 'warning', Inativo: 'gray' }[s] || 'gray'); }

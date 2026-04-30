@@ -1631,7 +1631,7 @@ function pageFinanceiro() {
   const vendaRefs=new Set(state.financeiro.map(f=>{const m=(f.descricao||'').match(/^\[ref:([^\]]+)\]/);return m?m[1]:null;}).filter(Boolean));
   state.vendas.forEach(v => { if (!vendaRefs.has(v.id)) lanc.push({ id: 'v_'+v.id, tipo: 'receita', data: v.data, descricao: 'Venda '+(v.clienteNome||'avulsa'), categoria: 'Venda', valor: v.total||0, source: 'venda', createdAt: v.createdAt }); });
   state.financeiro.forEach(f => lanc.push({ ...f, source: 'fin' }));
-  lanc.sort((a,b) => (b.createdAt||b.data||'').localeCompare(a.createdAt||a.data||''));
+  lanc.sort((a,b) => { const d=(b.data||'').localeCompare(a.data||''); return d!==0?d:(b.createdAt||'').localeCompare(a.createdAt||''); });
   if (finFilter === 'receitas') lanc = lanc.filter(l => l.tipo === 'receita');
   if (finFilter === 'despesas') lanc = lanc.filter(l => l.tipo === 'despesa');
   if (finDateFilter) lanc = lanc.filter(l => l.data === finDateFilter);

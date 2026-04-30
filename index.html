@@ -550,7 +550,7 @@ function getServico(id) { return state.servicos.find(s => s.id === id); }
 function precoPorPorte(s, porte) { if (!s) return 0; return ({Pequeno:s.precoPequeno,Médio:s.precoMedio,Grande:s.precoGrande}[porte]) || s.precoMedio || 0; }
 function diasDesdeUltimoBanho(p) { return p.ultimoBanho ? daysBetween(p.ultimoBanho, todayStr()) : null; }
 function proximoRetornoEstimado(p) { if (!p.ultimoBanho || !p.recorrenciaDias) return null; const d = new Date(p.ultimoBanho+'T00:00:00'); d.setDate(d.getDate()+(p.recorrenciaDias||21)); return d.toISOString().slice(0,10); }
-function receitaDoMes(ano, mes) { let t = 0; state.agendamentos.forEach(a => { if (a.status==='realizado') { const d = new Date(a.data+'T00:00:00'); if (d.getFullYear()===ano && d.getMonth()===mes) t += (a.valor||0); } }); state.vendas.forEach(v => { const d = new Date(v.data+'T00:00:00'); if (d.getFullYear()===ano && d.getMonth()===mes) t += (v.total||0); }); state.financeiro.forEach(f => { if (f.tipo==='receita') { const d = new Date(f.data+'T00:00:00'); if (d.getFullYear()===ano && d.getMonth()===mes) t += (f.valor||0); } }); return t; }
+function receitaDoMes(ano, mes) { let t = 0; state.agendamentos.forEach(a => { if (a.status==='realizado') { const d = new Date(a.data+'T00:00:00'); if (d.getFullYear()===ano && d.getMonth()===mes) t += (a.valor||0); } }); const vendaRefs=new Set(state.financeiro.map(f=>{const m=(f.descricao||'').match(/^\[ref:([^\]]+)\]/);return m?m[1]:null;}).filter(Boolean)); state.vendas.forEach(v => { if (!vendaRefs.has(v.id)) { const d = new Date(v.data+'T00:00:00'); if (d.getFullYear()===ano && d.getMonth()===mes) t += (v.total||0); } }); state.financeiro.forEach(f => { if (f.tipo==='receita') { const d = new Date(f.data+'T00:00:00'); if (d.getFullYear()===ano && d.getMonth()===mes) t += (f.valor||0); } }); return t; }
 function despesasDoMes(ano, mes) { return state.financeiro.filter(f => { if (f.tipo!=='despesa') return false; const d = new Date(f.data+'T00:00:00'); return d.getFullYear()===ano && d.getMonth()===mes; }).reduce((s,f) => s+(f.valor||0), 0); }
 
 function getInitials(name) { return (name||'PS').split(' ').slice(0,2).map(w => w[0]||'').join('').toUpperCase(); }
@@ -1610,6 +1610,12 @@ window.finalizarPdv = async function() {
         }
       }
     }
+    // 3) Registra receita no financeiro
+    const itensDesc = pdvCart.map(i => i.nome).join(', ');
+    const finPayload = { tipo:'receita', categoria:'Venda PDV', valor:total, data:todayStr(), descricao:'[ref:'+vRow.id+'] PDV'+(cliente?' - '+cliente.nome:'')+': '+itensDesc.slice(0,150), user_id:u.id };
+    const {data:finRow,error:finErr} = await sb.from('financeiro').insert(finPayload).select().single();
+    if (finErr) console.warn('financeiro insert:',finErr);
+    else state.financeiro.unshift(Mappers.finFromDb(finRow));
     showAlert(`Venda finalizada! Total: ${fmtBRL(total)}`);
     pdvCart = []; pdvCliente = ''; renderPage();
   } catch(err) { reportErr('finalizar venda', err); }
@@ -1622,9 +1628,10 @@ function pageFinanceiro() {
   const receita = receitaDoMes(ano, mes), despesas = despesasDoMes(ano, mes), lucro = receita - despesas;
   let lanc = [];
   state.agendamentos.forEach(a => { if (a.status === 'realizado') { const p = getPet(a.petId); const t = p?getTutor(p.tutorId):null; lanc.push({ id: 'a_'+a.id, tipo: 'receita', data: a.data, descricao: a.servicoNome+' - '+(p?.nome||'?')+' ('+(t?.nome||'')+')', categoria: 'Serviço', valor: a.valor||0, source: 'agend' }); } });
-  state.vendas.forEach(v => lanc.push({ id: 'v_'+v.id, tipo: 'receita', data: v.data, descricao: 'Venda '+(v.clienteNome||'avulsa'), categoria: 'Venda', valor: v.total||0, source: 'venda' }));
+  const vendaRefs=new Set(state.financeiro.map(f=>{const m=(f.descricao||'').match(/^\[ref:([^\]]+)\]/);return m?m[1]:null;}).filter(Boolean));
+  state.vendas.forEach(v => { if (!vendaRefs.has(v.id)) lanc.push({ id: 'v_'+v.id, tipo: 'receita', data: v.data, descricao: 'Venda '+(v.clienteNome||'avulsa'), categoria: 'Venda', valor: v.total||0, source: 'venda' }); });
   state.financeiro.forEach(f => lanc.push({ ...f, source: 'fin' }));
-  lanc.sort((a,b) => b.data.localeCompare(a.data));
+  lanc.sort((a,b) => (b.data||'').localeCompare(a.data||''));
   if (finFilter === 'receitas') lanc = lanc.filter(l => l.tipo === 'receita');
   if (finFilter === 'despesas') lanc = lanc.filter(l => l.tipo === 'despesa');
 
@@ -1649,7 +1656,7 @@ function pageFinanceiro() {
     <div class="card">
       <table>
         <thead><tr><th>Data</th><th>Tipo</th><th>Categoria</th><th>Descrição</th><th>Valor</th><th></th></tr></thead>
-        <tbody>${lanc.length ? lanc.map(l => `<tr><td>${fmtDate(l.data)}</td><td><span class="badge badge-${l.tipo==='receita'?'success':'danger'}">${l.tipo}</span></td><td>${escapeHtml(l.categoria||'-')}</td><td>${escapeHtml(l.descricao||'-')}</td><td style="color:${l.tipo==='receita'?'var(--success)':'var(--danger)'};font-weight:600">${l.tipo==='despesa'?'-':''}${fmtBRL(l.valor)}</td><td><div style="display:flex;gap:4px"><button class="btn btn-secondary btn-sm" onclick="editarLancamento('${l.id}','${l.source}')">Editar</button> <button class="btn btn-secondary btn-sm" style="color:var(--danger)" onclick="excluirLancamento('${l.id}','${l.source}')">Excluir</button></div></td></tr>`).join('') : '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--text-muted)">Nenhum lançamento</td></tr>'}</tbody>
+        <tbody>${lanc.length ? lanc.map(l => `<tr><td>${fmtDate(l.data)}</td><td><span class="badge badge-${l.tipo==='receita'?'success':'danger'}">${l.tipo}</span></td><td>${escapeHtml(l.categoria||'-')}</td><td>${escapeHtml((l.descricao||'-').replace(/^\[ref:[^\]]+\]\s*/,''))}</td><td style="color:${l.tipo==='receita'?'var(--success)':'var(--danger)'};font-weight:600">${l.tipo==='despesa'?'-':''}${fmtBRL(l.valor)}</td><td><div style="display:flex;gap:4px"><button class="btn btn-secondary btn-sm" onclick="editarLancamento('${l.id}','${l.source}')">Editar</button> <button class="btn btn-secondary btn-sm" style="color:var(--danger)" onclick="excluirLancamento('${l.id}','${l.source}')">Excluir</button></div></td></tr>`).join('') : '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--text-muted)">Nenhum lançamento</td></tr>'}</tbody>
       </table>
     </div>`;
 }

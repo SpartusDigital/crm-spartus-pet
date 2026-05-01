@@ -1622,19 +1622,34 @@ window.finalizarPdv = async function() {
 };
 
 // ====== PAGE: FINANCEIRO ======
-let finFilter = 'todos', finDateFilter = '';
+let finFilter = 'todos', finDateFrom = '', finDateTo = '';
 function pageFinanceiro() {
   const now = new Date(), ano = now.getFullYear(), mes = now.getMonth();
-  const receita = receitaDoMes(ano, mes), despesas = despesasDoMes(ano, mes), lucro = receita - despesas;
+  const hasDateFilter = finDateFrom || finDateTo;
+
+  // Build full ledger
   let lanc = [];
   state.agendamentos.forEach(a => { if (a.status === 'realizado') { const p = getPet(a.petId); const t = p?getTutor(p.tutorId):null; lanc.push({ id: 'a_'+a.id, tipo: 'receita', data: a.data, descricao: a.servicoNome+' - '+(p?.nome||'?')+' ('+(t?.nome||'')+')', categoria: 'Serviço', valor: a.valor||0, source: 'agend', createdAt: a.createdAt }); } });
   const vendaRefs=new Set(state.financeiro.map(f=>{const m=(f.descricao||'').match(/^\[ref:([^\]]+)\]/);return m?m[1]:null;}).filter(Boolean));
   state.vendas.forEach(v => { if (!vendaRefs.has(v.id)) lanc.push({ id: 'v_'+v.id, tipo: 'receita', data: v.data, descricao: 'Venda '+(v.clienteNome||'avulsa'), categoria: 'Venda', valor: v.total||0, source: 'venda', createdAt: v.createdAt }); });
   state.financeiro.forEach(f => lanc.push({ ...f, source: 'fin' }));
   lanc.sort((a,b) => { const d=(b.data||'').localeCompare(a.data||''); return d!==0?d:(b.createdAt||'').localeCompare(a.createdAt||''); });
+
+  // KPI base: date range if set, otherwise current month
+  let kpiLanc = hasDateFilter
+    ? lanc.filter(l => { if (!l.data) return false; if (finDateFrom && l.data < finDateFrom) return false; if (finDateTo && l.data > finDateTo) return false; return true; })
+    : lanc.filter(l => { if (!l.data) return false; const d = new Date(l.data+'T00:00:00'); return d.getFullYear()===ano && d.getMonth()===mes; });
+
+  const receita = kpiLanc.filter(l => l.tipo==='receita').reduce((s,l) => s+(l.valor||0), 0);
+  const despesas = kpiLanc.filter(l => l.tipo==='despesa').reduce((s,l) => s+(l.valor||0), 0);
+  const lucro = receita - despesas;
+  const kpiSuffix = hasDateFilter ? 'do período' : 'do mês';
+
+  // Table: apply date range then type filter
+  if (finDateFrom) lanc = lanc.filter(l => l.data && l.data >= finDateFrom);
+  if (finDateTo) lanc = lanc.filter(l => l.data && l.data <= finDateTo);
   if (finFilter === 'receitas') lanc = lanc.filter(l => l.tipo === 'receita');
   if (finFilter === 'despesas') lanc = lanc.filter(l => l.tipo === 'despesa');
-  if (finDateFilter) lanc = lanc.filter(l => l.data === finDateFilter);
 
   return `
     <div class="page-header"><div><div class="page-title">Financeiro</div><div class="page-sub">Controle de receitas e despesas</div></div>
@@ -1644,15 +1659,18 @@ function pageFinanceiro() {
       </div>
     </div>
     <div class="kpi-grid">
-      <div class="kpi"><div class="kpi-label">Receita do mês</div><div class="kpi-value success">${fmtBRL(receita)}</div></div>
-      <div class="kpi"><div class="kpi-label">Despesas do mês</div><div class="kpi-value danger">${fmtBRL(despesas)}</div></div>
-      <div class="kpi"><div class="kpi-label">Lucro do mês</div><div class="kpi-value ${lucro>=0?'success':'danger'}">${fmtBRL(lucro)}</div></div>
+      <div class="kpi"><div class="kpi-label">Receita ${kpiSuffix}</div><div class="kpi-value success">${fmtBRL(receita)}</div></div>
+      <div class="kpi"><div class="kpi-label">Despesas ${kpiSuffix}</div><div class="kpi-value danger">${fmtBRL(despesas)}</div></div>
+      <div class="kpi"><div class="kpi-label">Lucro ${kpiSuffix}</div><div class="kpi-value ${lucro>=0?'success':'danger'}">${fmtBRL(lucro)}</div></div>
       <div class="kpi"><div class="kpi-label">Margem</div><div class="kpi-value">${receita>0?((lucro/receita)*100).toFixed(1):0}%</div></div>
     </div>
     <div style="display:flex;align-items:center;gap:10px;margin:14px 0 6px;flex-wrap:wrap">
-      <span style="font-size:13px;font-weight:500;color:var(--text-muted)">Filtrar por dia:</span>
-      <input type="date" value="${finDateFilter}" onchange="finDateFilter=this.value;renderPage()" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:inherit;cursor:pointer">
-      ${finDateFilter ? '<button class="btn btn-secondary btn-sm" onclick="finDateFilter=\'\';renderPage()">Limpar data</button>' : ''}
+      <span style="font-size:13px;font-weight:500;color:var(--text-muted)">Período:</span>
+      <span style="font-size:13px;color:var(--text-muted)">De</span>
+      <input type="date" value="${finDateFrom}" onchange="finDateFrom=this.value;renderPage()" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:inherit;cursor:pointer">
+      <span style="font-size:13px;color:var(--text-muted)">até</span>
+      <input type="date" value="${finDateTo}" onchange="finDateTo=this.value;renderPage()" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:inherit;cursor:pointer">
+      ${hasDateFilter ? '<button class="btn btn-secondary btn-sm" onclick="finDateFrom=\'\';finDateTo=\'\';renderPage()">Limpar período</button>' : ''}
     </div>
     <div class="tabs">
       <div class="tab ${finFilter==='todos'?'active':''}" onclick="finFilter='todos';renderPage()">Todos</div>
